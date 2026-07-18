@@ -31,12 +31,12 @@ const getOriginalImageSize = async (path) => {
   return originalSize;
 };
 
-const main = async () => {
+const compareQuality = async (originalPath, outputName) => {
   const qualityValues = [100, 80, 50, 20];
-  const originalPath = "./images/cat.jpg";
-
   try {
     const originalSize = await getOriginalImageSize(originalPath);
+    console.log("=============");
+    console.log(outputName);
     console.log(
       `原始大小：${originalSize} bytes ≒ ${Math.round(originalSize / 1024)} KB`,
     );
@@ -47,7 +47,7 @@ const main = async () => {
 
       const info = await image
         .jpeg({ quality: value })
-        .toFile(`./output/quality${value}.jpg`);
+        .toFile(`./output/${outputName}-quality${value}.jpg`);
       console.log(
         `輸出大小：${info.size} bytes ≒ ${Math.round(info.size / 1024)} KB`,
       );
@@ -56,15 +56,23 @@ const main = async () => {
       );
       console.log("-----------------");
     }
+    console.log("=============");
   } catch (error) {
     console.log(error.message);
   }
+};
+
+const main = async () => {
+  await compareQuality("./images/cat.jpg", "cat");
+  await compareQuality("./images/cat-illustration.png", "cat-illustration");
 };
 
 main();
 
 /* console 結果：
 
+=============
+cat
 原始大小：900980 bytes ≒ 880 KB
 quality 值：100
 輸出大小：2242274 bytes ≒ 2190 KB
@@ -81,5 +89,26 @@ quality 值：50
 quality 值：20
 輸出大小：168038 bytes ≒ 164 KB
 節省比例：81%
-
+-----------------
+=============
+=============
+cat-illustration
+原始大小：2211496 bytes ≒ 2160 KB
+quality 值：100
+輸出大小：941003 bytes ≒ 919 KB
+節省比例：57%
+-----------------
+quality 值：80
+輸出大小：166010 bytes ≒ 162 KB
+節省比例：92%
+-----------------
+quality 值：50
+輸出大小：92269 bytes ≒ 90 KB
+節省比例：96%
+-----------------
+quality 值：20
+輸出大小：48219 bytes ≒ 47 KB
+節省比例：98%
+-----------------
+=============
 */
