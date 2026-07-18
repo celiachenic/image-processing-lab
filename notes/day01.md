@@ -58,7 +58,7 @@ const metadata = await image.metadata(); // 執行處理（非同步）
 ---
 ### `metadata()`：取得圖片資訊
 
-`metadata()` 會回傳一個包含圖片資訊的物件（Object），常用欄位如下：
+`metadata()` 會回傳一個包含圖片資訊的物件，常用欄位如下：
 
 | 欄位 | 說明 |
 |------|------|
@@ -78,6 +78,86 @@ console.log(metadata.height);     // 2333
 console.log(metadata.format);     // jpeg
 console.log(metadata.hasAlpha);   // false
 ```
+---
+
+### `toFile()`：把處理結果寫到檔案
+
+`toFile()` 本身不是負責轉檔，它只是把處理結果寫到檔案。Sharp 會根據指定的輸出格式（副檔名或 `.jpeg()`、`.png()`、`.webp()` 等）來決定輸出成什麼格式。
+
+`toFile()` 成功後，會回傳一個 **info 物件（Object）**，裡面包含**輸出圖片**的資訊，而不是原始圖片的資訊。
+
+例如：
+
+```js
+{
+  format: 'webp',
+  width: 2333,
+  height: 2333,
+  channels: 3,
+  premultiplied: false,
+  hasAlpha: false,
+  size: 387792
+}
+```
+
+
+| 屬性              | 說明                
+| --------------- | ----------------- |
+| `format`        | 輸出圖片格式            |
+| `width`         | 輸出圖片寬度（px）        |
+| `height`        | 輸出圖片高度（px）        | 
+| `channels`      | 色彩通道數             |
+| `premultiplied` | 表示圖片是否使用 Premultiplied Alpha（預乘 Alpha）。這是圖片處理和繪圖引擎常用的技術，用來提升合成效率。 | 
+| `hasAlpha`      | 是否具有透明通道          |
+| `size`          | 輸出檔案大小（Bytes）     | 
+
+#### 單位換算
+1 KB = 1024 Bytes
+1 MB = 1024 KB
+1 GB = 1024 MB
+
+```text
+387792 Bytes
+≈ 379 KB
+```
+
+之後可以直接算：
+
+```js
+const saved = ((originalSize - info.size) / originalSize) * 100;
+```
+
+得到：
+
+```text
+節省 42%
+```
+
+---
+
+
+### 並非所有格式都能互相轉換
+
+不是每種格式都有相同能力，所以轉檔時可能會遺失某些資訊。
+
+例如 PNG → JPEG：
+```
+PNG（有透明背景）
+        │
+        ▼
+JPEG（不支援透明）
+```
+
+透明背景會消失，通常會變成白色或黑色背景（可設定）。
+
+例如：
+```js
+await sharp("logo.png")
+  .jpeg()
+  .toFile("logo.jpg");
+```
+如果 logo.png 有透明背景，輸出的 logo.jpg 就一定沒有透明背景。
+
 
 
 ## 參考資源
