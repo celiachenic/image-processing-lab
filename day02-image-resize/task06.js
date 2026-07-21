@@ -26,3 +26,48 @@ processImage({
 思考：
 如果未來要支援 JPEG、PNG，只需要修改哪裡？
 */
+
+const sharp = require("sharp");
+
+const processImage = async ({
+  inputPath,
+  outputPath,
+  quality = 80,
+  maxWidth,
+}) => {
+  const info = await sharp(inputPath)
+    .resize({
+      width: maxWidth,
+      withoutEnlargement: true,
+    })
+    .webp({ quality })
+    .toFile(outputPath);
+  return {
+    format: info.format,
+    size: info.size,
+    width: info.width,
+    height: info.height,
+  };
+};
+
+const main = async () => {
+  try {
+    const result = await processImage({
+      inputPath: "./images/cat.jpg",
+      outputPath: "./output/task06Test.webp",
+      quality: 80,
+      maxWidth: 1200,
+    });
+    console.log(result);
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+main();
+
+/*console
+
+{ format: 'webp', size: 43902, width: 1200, height: 800 }
+
+*/
