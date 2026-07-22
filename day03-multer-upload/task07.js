@@ -26,3 +26,43 @@ POST /upload
 
 研究：
 `req.body` 與 `req.file` 的差異。*/
+
+const express = require("express");
+const multer = require("multer");
+const app = express();
+
+app.use(express.json());
+
+const upload = multer({ dest: "./uploads" });
+app.post("/upload", upload.single("image"), (req, res) => {
+  console.log(req.file);
+  return res.status(200).json({
+    status: "success",
+    file: req.file,
+  });
+});
+
+app.listen(3000, () => {
+  console.log("server is running on port 3000");
+});
+
+
+/*用 postman 測試：
+
+multipart/form-data
+| Key | Type | Value |
+| --- | --- | --- |
+| `image` | File | `cat.jpg` |
+
+回傳 req.file 結果 ：
+{
+  fieldname: 'image',
+  originalname: 'cat.jpg',
+  encoding: '7bit',
+  mimetype: 'image/jpeg',
+  path: 'uploads\\597ebb81658c2532aaebb185796ff498',
+  destination: './uploads',
+  filename: '597ebb81658c2532aaebb185796ff498',
+  size: 262179
+}
+*/
