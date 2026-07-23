@@ -33,7 +33,7 @@ const express = require("express");
 const multer = require("multer");
 const fs = require("node:fs");
 
-fs.mkdirSync("./upload", {
+fs.mkdirSync("./uploads", {
   recursive: true,
 });
 
@@ -41,7 +41,7 @@ const app = express();
 
 const storage = multer.diskStorage({
   destination: (req, file, callback) => {
-    callback(null, "./upload");
+    callback(null, "./uploads");
   },
   filename: (req, file, callback) => {
     const unique = Date.now();
