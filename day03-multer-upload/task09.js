@@ -28,3 +28,59 @@
 思考：
 為什麼不應該讓這種錯誤變成 HTTP 500？
  */
+
+const express = require("express");
+const multer = require("multer");
+const fs = require("node:fs");
+
+fs.mkdirSync("./upload", {
+  recursive: true,
+});
+
+const app = express();
+
+const storage = multer.diskStorage({
+  destination: (req, file, callback) => {
+    callback(null, "./upload");
+  },
+  filename: (req, file, callback) => {
+    const unique = Date.now();
+    const originalName = file.originalname;
+    callback(null, `${unique}-${originalName}`);
+  },
+});
+const upload = multer({ storage });
+
+app.post("/upload", upload.single("image"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      status: "error",
+      message: "請上傳圖片",
+    });
+  }
+  return res.status(200).json({
+    status: "success",
+    file: req.file,
+  });
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      status: "error",
+      message: err.message,
+    });
+  }
+  return res.status(500).json({
+    status: "error",
+    message: "伺服器出問題",
+  });
+});
+
+const server = app.listen(3000, () => {
+  console.log("server is running on localhost port 3000.");
+});
+
+server.on("error", (err) => {
+  console.error("Server 啟動失敗：", err.message);
+});

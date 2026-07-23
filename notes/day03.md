@@ -277,6 +277,28 @@ fs.mkdirSync("uploads", {
 
 ---
 
+### 避免將為上傳圖片的錯誤和 HTTP 500 混用
+
+沒有上傳圖片屬於使用者送出的請求不完整，是 Client Error，
+不是伺服器內部發生故障，因此應回傳 `HTTP 400 Bad Request`。
+
+如果回傳 `HTTP 500`，會讓前端或使用者誤以為是伺服器本身出問題，
+不利於判斷錯誤原因。
+
+```
+沒有選檔案
+→ req.file 不存在
+→ Route 回傳 400
+
+檔案太大、欄位名稱錯誤等 Multer 問題
+→ MulterError
+→ Error middleware 回傳 400
+
+真正的伺服器錯誤
+→ Error middleware 回傳 500
+```
+---
+
 ## 流程圖
 
 ```text
