@@ -20,3 +20,68 @@
 研究：
 如果圖片要直接上傳到 AWS S3，通常會搭配哪種 Storage？
  */
+
+const express = require("express");
+const multer = require("multer");
+
+const app = express();
+
+// Disk Storage
+const diskStorage = multer.diskStorage({
+  destination: (req, file, callback) => {
+    callback(null, "uploads/");
+  },
+
+  filename: (req, file, callback) => {
+    const uniqueName = `${Date.now()}-${file.originalname}`;
+    callback(null, uniqueName);
+  },
+});
+const diskStorageUpload = multer({ storage: diskStorage });
+
+// Memory Storage
+const memoryStorage = multer.memoryStorage();
+const memoryStorageUpload = multer({ storage: memoryStorage }); //檔案會在 req.file.buffer
+
+app.post("/diskupload", diskStorageUpload.single("image"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      status: "error",
+      message: "請上傳圖片",
+    });
+  }
+  return res.status(200).json({
+    status: "success",
+    file: req.file,
+  });
+});
+
+app.post("/memoryupload", memoryStorageUpload.single("image"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      status: "error",
+      message: "請上傳圖片",
+    });
+  }
+  return res.status(200).json({
+    status: "success",
+    hasBuffer: Boolean(req.file.buffer),
+  });
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      status: "error",
+      message: err.message,
+    });
+  }
+  return res.status(500).json({
+    status: "error",
+    message: err.message,
+  });
+});
+
+app.listen(3000, () => {
+  console.log("server is running on localhost port 3000");
+});

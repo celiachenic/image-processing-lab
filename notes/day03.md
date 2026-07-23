@@ -192,6 +192,91 @@ uploads/1784734567890.jpg
 
 ---
 
+### 使用 `memoryStorage()` 時不建議直接回傳 Buffer
+
+若寫：
+
+```js
+ return res.status(200).json({
+    status: "success",
+    buffer: req.file.buffer
+  });
+```
+
+雖然可以，但 Buffer 轉成 JSON 後會變成很長的數字陣列，例如：
+
+{
+  "type": "Buffer",
+  "data": [255, 216, 255, 224, 0, 16]
+}
+
+圖片一大，Postman 回應會非常龐大。
+
+測試時這樣就夠了：
+```js
+hasBuffer: Boolean(req.file.buffer)
+```
+如果結果是：
+```js
+{
+  "hasBuffer": true
+}
+```
+就代表 Memory Storage 成功把檔案放進記憶體。
+
+---
+### `memoryStorage()` 和 `diskStorage()` 比較
+
+| 項目 | memoryStorage() | diskStorage() |
+|------|-----------------|---------------|
+| 優點 | 不需先寫入硬碟，直接取得 `Buffer`，方便後續圖片處理 | 檔案會保存於硬碟，方便查看、測試與除錯 |
+| 缺點 | 佔用記憶體，大檔案或大量上傳容易增加記憶體負擔 | 需要占用硬碟空間，若不清理容易累積大量檔案 |
+| 適用情境 | 圖片壓縮、圖片轉檔、直接上傳雲端 | 暫存檔案、需要保留原始檔、開發測試 |
+
+
+**問題：**
+
+如果是本次side project 圖片壓縮工具，我會選擇哪一種 Storage？為什麼？
+
+**回答：**
+
+我會選擇 `memoryStorage()` 因為圖片上傳後會立即交給 Sharp 進行壓縮、轉檔，不需要先存入硬碟，直接使用 `req.file.buffer` 就能處理，流程較簡潔，也能減少暫存檔案的管理。
+
+在正式專案中，如果圖片最終要直接上傳到 AWS S3、Cloudinary、Google Cloud Storage 等雲端儲存服務，通常會搭配 `memoryStorage()`，因為可以直接使用 `req.file.buffer` 上傳，不需要經過硬碟。
+
+---
+
+### Memory Storage  和	Disk Storage 比較
+
+| Memory Storage   | Disk Storage |
+| ---------------- | ------------ |
+| 放在 **RAM**       | 放在 **硬碟**    |
+| 程式結束就消失          | 檔案會保留下來      |
+| 不占硬碟             | 會占硬碟         |
+| 會占記憶體            | 幾乎不占記憶體      |
+| 適合立即處理（Sharp、S3） | 適合需要保留檔案     |
+
+---
+
+### 用 `fs` 模組先確定資料夾是否已存在
+
+自訂 `diskStorage()` 寫法時，最好先建立資料夾，避免資料夾不存在導致錯誤。
+
+放在建立 Storage 之前：
+```js
+const express = require("express");
+const multer = require("multer");
+const fs = require("node:fs");
+
+const app = express();
+
+fs.mkdirSync("uploads", {
+  recursive: true,
+});
+```
+
+---
+
 ## 流程圖
 
 ```text
