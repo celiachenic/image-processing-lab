@@ -226,8 +226,8 @@ Multer 中目前遇到三種 callback：
 
 它們都是 **Multer 提供給我們的 callback function**，只是用途不同。
 
-- destination、filename 是 diskStorage() 是 multer.diskStorage() 的設定。
-- fileFilter 是 Multer 本身的設定。
+- `destination`、`filename` 是 `multer.diskStorage()` 的設定。
+- `fileFilter` 是 `Multer` 本身的設定。
 
 ```
 multer()
@@ -548,7 +548,111 @@ if (
   }
 ```
 ---
+### `limits.fileSize`：限制上傳檔案大小
 
+Multer 可以透過 `limits` 設定上傳限制。
+
+```js
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+  },
+});
+```
+
+#### 超過大小限制時
+
+當使用者上傳的檔案超過 `fileSize` 限制時，Multer 會自動建立一個 `MulterError`。
+
+```js
+err instanceof multer.MulterError // true
+```
+
+錯誤代碼 (`err.code`)：
+
+```js
+LIMIT_FILE_SIZE
+```
+
+因此可以在 Error Middleware 中處理：
+
+```js
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        status: "error",
+        message: "圖片大小不可超過 5 MB",
+      });
+    }
+
+    return res.status(400).json({
+      status: "error",
+      message: err.message,
+    });
+  }
+});
+```
+
+#### limits 其他常見的 `err.code`
+
+| `err.code` | 說明 |
+|------------|------|
+| `LIMIT_FILE_SIZE` | 檔案超過大小限制 |
+| `LIMIT_FILE_COUNT` | 上傳檔案數量超過限制 |
+| `LIMIT_UNEXPECTED_FILE` | 上傳了未預期的欄位或檔案 |
+
+---
+
+### HTTP 413 Payload Too Large
+
+當使用者送出的 Request Body（包含文字欄位與上傳檔案） 超過伺服器允許的大小時，應回傳：
+
+```http
+413 Payload Too Large
+```
+
+常見情境：
+
+- 上傳圖片超過限制（例如 5 MB）
+- 上傳影片超過限制
+- POST 的 JSON 資料過大
+
+#### Multer 範例
+
+限制圖片大小為 5 MB 時，如果使用者上傳超過 5 MB 的圖片，Multer 會自動拋出：
+
+```js
+err instanceof multer.MulterError // true
+
+err.code // "LIMIT_FILE_SIZE"
+```
+
+在 Error Middleware 中處理：
+
+```js
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        status: "error",
+        message: "圖片大小不可超過 5 MB",
+      });
+    }
+  }
+});
+```
+
+#### 與 400 的差異
+
+| HTTP Status               | 重點                 | 例子                            |
+| ------------------------- | ------------------ | ----------------------------- |
+| 400 Bad Request       | **請求本身不符合規則**      | 少欄位、格式錯誤、JSON 語法錯誤、PDF 假裝 JPG |
+| 413 Payload Too Large | **請求格式正確，但超過容量限制** | 上傳 8 MB 圖片，但限制是 5 MB          |
+
+---
 
 ## 參考資料
 
