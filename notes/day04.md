@@ -10,9 +10,6 @@
 ## 資料夾結構
 ```
 day04-validation/
-├── images/
-│   └── cat.jpg
-├── uploads/
 ├── task10.js
 ├── task11.js
 └── task12.js
@@ -652,6 +649,71 @@ app.use((err, req, res, next) => {
 | 400 Bad Request       | **請求本身不符合規則**      | 少欄位、格式錯誤、JSON 語法錯誤、PDF 假裝 JPG |
 | 413 Payload Too Large | **請求格式正確，但超過容量限制** | 上傳 8 MB 圖片，但限制是 5 MB          |
 
+---
+
+### 將 `!req.file` 交給 Error Handler Middleware
+
+Task 9 時，沒有上傳圖片可以直接在 Route Handler 回傳：
+
+```js
+if (!req.file) {
+  return res.status(400).json({
+    status: "error",
+    message: "未上傳圖片",
+  });
+}
+```
+
+到了 Task 12，改成交給 Error Handler Middleware 統一處理：
+
+```js
+app.post("/upload", upload.single("image"), (req, res, next) => {
+  if (!req.file) {
+    return next(new Error("未上傳圖片"));
+  }
+  ...
+});
+```
+要將錯誤交給 Express 尋找合適的 Error Handler Middleware，需呼叫 `next(error)`，並記得在 Route Handler 的參數中加入 `next`。
+
+#### 錯誤流程
+
+```text
+Request
+    │
+    ▼
+Route Handler
+(req, res, next)
+    │
+    ▼
+next(new Error("未上傳圖片"))
+    │
+    ▼
+Express 尋找 Error Handler Middleware
+    │
+    ▼
+app.use((err, req, res, next) => {
+  ...
+})
+```
+
+將錯誤交給 Error Handler Middleware，可以把所有錯誤集中處理，而不是每個 Route 都自己回傳錯誤。
+
+例如：
+
+- 未上傳圖片
+- 不支援的圖片格式
+- 檔案超過 5 MB
+- 其他 API 錯誤
+
+都可以由同一個 Error Middleware 負責回應。
+
+優點：
+
+- 不用每個 Route 都重複寫 `res.status(...).json(...)`
+- API 錯誤回傳格式一致
+- 錯誤邏輯集中，較容易維護
+- 未來新增錯誤種類，只需修改 Error Middleware
 ---
 
 ## 參考資料
