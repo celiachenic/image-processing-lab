@@ -64,14 +64,22 @@ const upload = multer({
   },
 });
 
-app.post("/images/process", upload.single("image"), (req, res, next) => {
+app.post("/images/process", upload.single("image"), async (req, res, next) => {
   if (!req.file) {
     return next(new Error("未上傳圖片"));
   }
-
-  return res.status(200).json({
-    status: "success",
-  });
+  try {
+    const outputBuffer = await sharp(req.file.buffer)
+      .webp({ quality: 80 })
+      .toBuffer();
+    return res.status(200).json({
+      status: "success",
+      message: "圖片處理成功",
+      outputBufferSize: outputBuffer.length,
+    });
+  } catch (error) {
+    return next(new Error("圖片處理出錯"));
+  }
 });
 
 app.use((err, req, res, next) => {
