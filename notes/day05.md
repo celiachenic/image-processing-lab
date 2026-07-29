@@ -212,7 +212,71 @@ Buffer 沒有 `size` 屬性。
 * `req.file.size`：Multer 提供的原始檔案大小。
 * `outputBuffer.length`：Sharp 處理後 Buffer 的大小（也就是輸出圖片大小），。
 
+---
 
+### 參數驗證
+
+合格參數格式
+
+```
+quality
+---------
+型別：Number
+範圍：1 ~ 100（含）
+
+maxWidth
+---------
+型別：Number
+範圍：> 0
+```
+
+注意：HTTP 傳來的參數（例如 req.body、req.query）通常都是字串，實作時通常需先轉成數字。
+
+---
+
+### controller 和 圖片處理函式的職責
+
+**哪些參數應該在 Controller (Route Handler) 驗證？**
+```
+是否有上傳圖片
+quality 是否存在
+quality 是否為整數
+quality 是否介於 1～100
+maxWidth 是否為整數
+maxWidth 是否大於 0
+```
+因為這些都是使用者輸入是否合法。
+
+
+**哪些適合交給圖片處理函式？**
+```
+resize 圖片
+WebP 轉檔
+壓縮品質設定
+Sharp 是否能成功解析圖片
+實際輸出圖片 Buffer
+```
+因為這些都是圖片處理的邏輯。
+
+流程表：
+
+```
+HTTP Request
+      │
+      ▼
+Controller (app.post)
+      │
+      ├── 驗證 req.file
+      ├── 驗證 quality
+      ├── 驗證 maxWidth
+      ▼
+Image Processing (Sharp)
+      │
+      ▼
+Response (res.json)
+```
+
+`quality`、`maxWidth` 的型別與範圍屬於使用者輸入，因此適合在 Controller 中驗證。Controller 應先阻止非法參數進入圖片處理流程。圖片處理函式則適合負責 `resize`、WebP 轉檔與壓縮，以及處理 Sharp 無法解析或轉換圖片時產生的錯誤。
 ---
 
 ## 參考資料
