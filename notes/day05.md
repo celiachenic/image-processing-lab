@@ -8,6 +8,7 @@
 ## 資料夾結構
 ```
 day05-process-api/
+├── output/
 ├── task13.js
 ├── task14.js
 └── task15.js

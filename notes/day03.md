@@ -270,7 +270,7 @@ const fs = require("node:fs");
 
 const app = express();
 
-fs.mkdirSync("uploads", {
+fs.mkdirSync("./uploads", {
   recursive: true,
 });
 ```
