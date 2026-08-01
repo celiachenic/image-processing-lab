@@ -931,6 +931,85 @@ res.download(filePath, (err) => {
   }
 });
 ```
+---
+
+### 為什麼要驗證 UUID？
+
+如果只檢查副檔名：
+
+```text
+secret.webp
+image.webp
+abc.webp
+```
+
+都會被視為合法檔名。
+
+驗證完整 UUID 格式可以確保只有系統產生的檔名才能被存取，降低使用者透過猜測檔名存取非預期檔案的風險。
+
+---
+
+### 驗證 UUID 檔名
+
+由於本專案使用：
+
+```js
+crypto.randomUUID()
+```
+
+產生檔名，因此除了確認副檔名為 `.webp` 外，也應驗證檔名是否符合 UUID 格式，避免使用者透過猜測檔名存取非預期檔案。
+
+例如：
+
+```text
+550e8400-e29b-41d4-a716-446655440000.webp
+```
+
+#### 使用 Regular Expression 驗證
+
+```js
+const uuidWebpPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+```
+
+驗證：
+
+```js
+const checkFilename = (filename) => {
+  return uuidWebpPattern.test(filename);
+};
+```
+
+#### 正規表示式說明
+
+| 語法 | 說明 |
+|------|------|
+| `^` | 字串開頭 |
+| `$` | 字串結尾 |
+| `[0-9a-f]` | 十六進位字元 |
+| `{8}` | 前 8 個字元 |
+| `4` | UUID Version 4 |
+| `[89ab]` | UUID Variant |
+| `\.webp` | 必須以 `.webp` 結尾 |
+| `i` | 忽略大小寫 |
+
+
+#### 可通過
+
+```text
+550e8400-e29b-41d4-a716-446655440000.webp
+```
+
+#### 不可通過
+
+```text
+abc.webp
+secret.webp
+550e8400-e29b-41d4-a716-446655440000.txt
+550e8400-e29b-11d4-a716-446655440000.webp
+550e8400-e29b-41d4-a716-446655440000.webp.exe
+```
+
 
 ---
 

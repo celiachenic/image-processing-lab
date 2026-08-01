@@ -76,12 +76,11 @@ const upload = multer({
   // limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+const uuidWebpPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+
 const checkFilename = (filename) => {
-  const arr = filename.split(".");
-  if (arr[arr.length - 1] !== "webp") {
-    return false;
-  }
-  return true;
+  return uuidWebpPattern.test(filename);
 };
 
 app.post("/images/process", upload.single("image"), async (req, res, next) => {
@@ -95,16 +94,15 @@ app.post("/images/process", upload.single("image"), async (req, res, next) => {
       filename,
       previewUrl: `/preview/${filename}`,
       downloadUrl: `/download/${filename}`,
-      staticPreviewUrl:`/outputs/${filename}`
+      staticPreviewUrl: `/outputs/${filename}`,
     });
   } catch (error) {
     return next(new Error("圖片處理失敗"));
   }
 });
 //express.static() 預覽
-const outputs = path.join(__dirname, 'outputs')
+const outputs = path.join(__dirname, "outputs");
 app.use("/outputs", express.static(outputs));
-
 
 //res.sendFile() 預覽
 app.get("/preview/:filename", (req, res, next) => {
