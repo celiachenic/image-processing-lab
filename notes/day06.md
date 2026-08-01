@@ -970,17 +970,11 @@ crypto.randomUUID()
 ```js
 const uuidWebpPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
-```
 
-驗證：
-
-```js
 const checkFilename = (filename) => {
   return uuidWebpPattern.test(filename);
 };
 ```
-
-#### 正規表示式說明
 
 | 語法 | 說明 |
 |------|------|
@@ -1009,7 +1003,6 @@ secret.webp
 550e8400-e29b-11d4-a716-446655440000.webp
 550e8400-e29b-41d4-a716-446655440000.webp.exe
 ```
-
 
 ---
 
