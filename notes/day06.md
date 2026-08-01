@@ -314,5 +314,625 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg
 
 ---
 
+
+###  Static File 靜態資源
+
+Static File（靜態資源）是指**不需要經過伺服器運算即可直接回傳給使用者的檔案**。
+
+常見的靜態資源：
+
+- HTML
+- CSS
+- JavaScript
+- 圖片（JPG、PNG、WebP）
+- PDF
+- 影片
+
+例如：
+
+```text
+outputs/
+├── cat.webp
+├── dog.webp
+└── bird.webp
+```
+
+Express 可以直接將這些檔案提供給瀏覽器存取。
+
+---
+
+### `express.static()`：將某個資料夾公開成可透過 URL 存取的靜態資源。
+
+例如：
+
+```js
+app.use("/outputs", express.static(path.join(__dirname, "outputs")));
+```
+
+Express 會自動處理檔案回傳。
+
+資料夾：
+
+```text
+outputs/
+└── cat.webp
+```
+
+使用者即可透過：
+
+```text
+GET /outputs/cat.webp
+```
+
+直接取得圖片。
+
+#### 特點
+
+- 不需自己建立 Route
+- Express 自動尋找並回傳檔案
+- 適合公開圖片、CSS、JavaScript 等靜態資源
+- 常用於圖片預覽
+
+
+#### 運作流程
+
+```text
+Browser
+
+GET /outputs/cat.webp
+
+        ↓
+
+express.static()
+
+        ↓
+
+outputs/cat.webp
+
+        ↓
+
+Response
+```
+
+#### 成功
+
+若檔案存在：
+
+```text
+GET /outputs/cat.webp
+```
+
+Express 自動回傳：
+
+```text
+200 OK
+```
+
+並直接顯示圖片。
+
+
+#### 失敗
+
+若檔案不存在：
+
+```text
+GET /outputs/notfound.webp
+```
+
+Express 會回傳：
+
+```text
+404 Not Found
+```
+
+
+`express.static()` 沒有 callback，因此：
+
+- 無法得知檔案是否傳送完成
+- 無法在成功下載後執行其他程式
+- 無法像 `res.sendFile()` 或 `res.download()` 一樣處理傳送過程中的錯誤
+
+若需要權限驗證、下載紀錄或自訂回應流程，通常會使用 `res.sendFile()` 或 `res.download()`。
+
+---
+
+### express.static() 的安全性
+
+`express.static()` 會公開整個指定資料夾，只要使用者知道或猜到檔名（URL），就能直接存取檔案。
+
+因此：
+
+- 不應公開不該存取的資料夾
+- 檔名應避免使用容易猜測的名稱（如 `image1.webp`、`Date.now()`）
+- 可使用 `crypto.randomUUID()` 提高檔名的不可預測性
+- 若需要權限控管，應改用 `res.sendFile()` 或 `res.download()` 搭配自訂 Route
+
+---
+
+### `res.sendFile()`：由程式指定要回傳哪一個檔案。
+
+例如：
+
+```js
+res.sendFile(path.join(__dirname, "outputs", filename));
+```
+
+與 `express.static()` 不同的是，它不是公開整個資料夾，而是由程式決定要回傳哪一個檔案。
+
+#### 運作流程
+
+```text
+Route
+
+↓
+
+檢查條件
+
+↓
+
+res.sendFile()
+
+↓
+
+回傳檔案
+```
+
+#### 適用情境
+
+可以先：
+
+- 檢查權限
+- 檢查檔案是否存在
+- 記錄下載 Log
+
+再決定是否回傳檔案。
+
+例如：
+
+```text
+GET /preview/:filename
+```
+
+---
+
+### `res.download()`：回傳檔案，但要求瀏覽器**下載**而不是直接顯示。
+
+例如：
+
+```js
+res.download(filePath);
+```
+
+#### 運作流程
+
+```text
+Browser
+
+GET /downloads/cat.webp
+
+↓
+
+res.download()
+
+↓
+
+Save As...
+```
+
+#### 原理
+
+`res.download()` 本質上也是回傳檔案，但會額外加入 HTTP Header：
+
+```http
+Content-Disposition: attachment
+```
+
+因此瀏覽器會：
+
+- 顯示下載視窗
+- 而不是直接預覽圖片
+
+---
+
+### Content-Disposition
+
+`Content-Disposition` 是 HTTP Response Header，用來告訴瀏覽器收到檔案後應如何處理。
+
+常見值：
+
+| Header | 瀏覽器行為 |
+|--------|-----------|
+| `inline` | 直接顯示內容（預設） |
+| `attachment` | 強制下載 |
+
+例如：
+
+```http
+Content-Disposition: attachment
+```
+
+瀏覽器會跳出下載視窗，而不是直接顯示圖片。
+
+Express 的 `res.download()` 會自動加入：
+
+```http
+Content-Disposition: attachment
+```
+
+因此非常適合提供檔案下載功能。
+
+---
+
+
+### sendFile() vs download()
+
+| 方法 | 瀏覽器行為 | 適用情境 |
+|-------|-----------|---------|
+| `res.sendFile()` | 顯示圖片 | 預覽 |
+| `res.download()` | 下載圖片 | 下載 |
+
+---
+
+### Preview URL
+
+圖片預覽通常使用：
+
+```text
+GET /outputs/cat.webp
+```
+
+API Response：
+
+```json
+{
+  "previewUrl": "/outputs/cat.webp"
+}
+```
+
+點擊網址：
+
+瀏覽器直接顯示圖片。
+
+---
+
+### Download URL
+
+圖片下載通常使用：
+
+```text
+GET /downloads/cat.webp
+```
+
+Route：
+
+```js
+app.get("/downloads/:filename", ...);
+```
+
+回傳：
+
+```js
+res.download(filePath);
+```
+
+API Response：
+
+```json
+{
+  "downloadUrl": "/downloads/cat.webp"
+}
+```
+
+點擊網址：
+
+瀏覽器會直接下載圖片。
+
+---
+
+### `path.join()` ：安全地組合路徑，自動處理不同作業系統的路徑格式
+
+Windows：
+
+```text
+outputs\cat.webp
+```
+
+Linux / macOS：
+
+```text
+outputs/cat.webp
+```
+
+因此不要自己手動拼接字串，而是使用：
+
+```js
+path.join(__dirname, "outputs", filename);
+// __dirname：目前程式所在資料夾（絕對路徑）
+// "outputs"：輸出資料夾
+// filename：檔名
+```
+
+讓 Node.js 自動處理不同作業系統的路徑格式。
+
+---
+
+### `fs.existsSync()`：下載圖片前先確認檔案是否存在
+
+例如：
+
+```js
+if (!fs.existsSync(filePath)) {
+  return res.status(404).json({
+    status: "error",
+    message: "找不到圖片"
+  });
+}
+```
+
+不存在時應回傳：
+
+```text
+404 Not Found
+```
+
+而不是：
+
+```text
+500 Internal Server Error
+```
+
+因為是找不到資源，而不是伺服器發生錯誤。
+
+---
+
+
+### Path Traversal（路徑穿越）
+
+不要直接相信使用者輸入的檔名。
+
+例如：
+
+```text
+GET /downloads/../../../package.json
+```
+
+如果直接將：
+
+```js
+req.params.filename
+```
+
+拼接成檔案路徑，就可能讓使用者存取伺服器上非預期的檔案。
+
+#### 避免方式
+
+- 驗證檔名是否合法
+- 限制只能存取 `outputs/`
+- 不允許 `../`
+- 使用 `path.join()` 建立路徑
+
+---
+
+### 三種方式比較
+
+| 方法 | 是否公開整個資料夾 | 是否需自行建立 Route | 適用情境 |
+|------|------------------|--------------------|---------|
+| `express.static()` | ✅ | ❌ | 圖片、CSS、JavaScript 等靜態資源 |
+| `res.sendFile()` | ❌ | ✅ | 圖片預覽、權限控制 |
+| `res.download()` | ❌ | ✅ | 提供檔案下載 |
+
+---
+
+### 下載圖片的兩種方式
+
+#### 1. Buffer（不存檔）
+
+流程：
+
+```text
+Upload
+↓
+Sharp
+↓
+toBuffer()
+↓
+res.send(buffer)
+```
+
+**優點**
+
+- 不需建立 `outputs/`
+- 不需清理暫存檔
+- Disk I/O 較少，速度較快
+
+**缺點**
+
+- 無法再次下載
+- 無法提供預覽網址（Preview URL）
+- 每次下載都需要重新產生 Buffer
+
+
+#### 2. File（先存檔）
+
+流程：
+
+```text
+Upload
+↓
+Sharp
+↓
+toFile()
+↓
+outputs/
+↓
+res.download()
+```
+
+**優點**
+
+- 可重複下載
+- 可提供圖片預覽
+- 可分享下載網址
+
+**缺點**
+
+- 需要硬碟空間
+- 需要定期清理檔案
+- Disk I/O 較多
+
+#### 本專案採用
+
+Task 17 需要實作：
+
+- `previewUrl`
+- `downloadUrl`
+- `GET /outputs/:filename`
+- `GET /downloads/:filename`
+
+因此需要先將圖片存到 `outputs/`，再透過 URL 提供預覽與下載。
+
+---
+
+### I/O（Input / Output）
+
+I/O（Input / Output）指的是程式與外部資源之間的資料讀寫，例如：
+
+- 讀取檔案
+- 寫入檔案
+- 存取資料庫
+- 網路傳輸
+
+在圖片處理中：
+
+- `toBuffer()`：資料保留在記憶體，不需讀寫硬碟，因此 Disk I/O 較少。
+- `toFile()`：需要將圖片寫入硬碟，下載時再讀取檔案，因此 Disk I/O 較多。
+
+一般而言，**硬碟 I/O 的速度比記憶體慢**，因此如果不需要保留檔案，直接使用 Buffer 通常會有較好的效能。
+
+---
+
+### 為什麼預覽圖片可以使用 `express.static()`，下載時卻可能使用 `res.download()`？
+
+`express.static()` 會將指定資料夾中的檔案提供給瀏覽器存取。
+
+瀏覽器收到圖片後，通常會根據 `Content-Type` 直接顯示，因此適合用來提供圖片預覽。
+
+`express.static()` 並不是不能下載檔案，而是通常不會主動加入：
+
+```http
+Content-Disposition: attachment
+```
+
+所以瀏覽器傾向直接開啟圖片，而不是強制下載。
+
+`res.download()` 會自動設定下載相關的 Response Header，讓瀏覽器將檔案視為附件下載，因此更適合提供下載功能。
+
+---
+
+### 是否應允許使用者直接存取整個輸出資料夾？
+
+不一定，要依產品需求與檔案內容判斷。
+
+若輸出圖片本來就是公開的暫存結果，而且檔名使用難以猜測的 UUID，可以公開專門存放公開圖片的 `outputs/` 資料夾。
+
+但不應公開：
+
+- 專案根目錄
+- `.env`
+- 使用者原始上傳檔案
+- 私人圖片
+- 包含敏感資料的資料夾
+
+若圖片需要登入、所有權或有效期限等權限控管，就不適合直接使用 `express.static()`，應改用自訂 Route 驗證後再回傳。
+
+---
+
+### 如何避免使用者透過 URL 存取非預期檔案？
+
+可以建立自訂 Route，在回傳檔案前進行驗證，例如：
+
+- 驗證檔名格式
+- 只接受 UUID 加 `.webp`
+- 拒絕包含 `/`、`\` 或 `..` 的檔名
+- 確認檔案路徑仍位於 `outputs/` 內
+- 確認檔案存在
+- 有會員系統時，驗證登入狀態與檔案所有權
+
+例如，可限制檔名格式為：
+
+```text
+UUID.webp
+```
+
+重點不是只擋掉部分不合法請求，而是要明確定義：
+
+> 哪些檔名、路徑與使用者可以存取，其他請求全部拒絕。
+
+
+---
+
+### `res.sendFile()` 與 `res.download()` 為什麼要使用 Callback？
+
+`sendFile()` 和 `download()` 傳送檔案的過程包含非同步操作。檔案不存在、讀取失敗等錯誤，通常不會被外層這種同步 `try...catch` 完整捕捉。
+
+這兩個方法本身提供 callback，用來取得傳送過程中的錯誤。當檔案傳送完成或發生錯誤時，Express 會呼叫 callback。
+
+例如：
+
+```js
+try {
+  res.download(filePath);
+} catch (error) {
+  // 不一定能捕捉到下載過程中的錯誤
+}
+```
+
+
+#### Callback 的用途
+
+可用於：
+
+- 處理檔案不存在
+- 處理檔案讀取失敗
+- 處理下載中斷
+- 記錄下載成功
+- 傳送完成後刪除暫存檔
+
+#### 注意事項
+
+當 callback 執行時，Response 可能已經送出部分內容。
+
+若 `res.headersSent === true`，代表回應已開始傳送，此時不應再次回傳新的 Response（例如 `res.status().json()`），否則可能出現：
+
+```text
+Cannot set headers after they are sent
+```
+
+---
+
+### `res.sendFile()` Callback 錯誤語法
+
+
+```js
+res.sendFile(filePath, (err) => {
+  if (err) {
+    return next(err);
+  }
+});
+```
+---
+
+### `res.download()` Callback 錯誤語法
+
+```js
+res.download(filePath, (err) => {
+  if (err) {
+    return next(err);
+  }
+});
+```
+
+---
+
 ## 參考資料
 
