@@ -1006,5 +1006,94 @@ secret.webp
 
 ---
 
+
+### `express.static()` 專用 404
+
+當使用者請求靜態檔案時：
+
+```text
+GET /outputs/:filename
+```
+
+若檔案不存在，`express.static()` 會呼叫 `next()`，繼續往後尋找符合的 Middleware。
+
+因此可以在 `express.static()` 後方建立一個專門處理 `/outputs` 的 404 Middleware。
+
+例如：
+
+```js
+app.use("/outputs", express.static(outputs));
+
+app.use("/outputs", (req, res) => {
+  return res.status(404).json({
+    status: "error",
+    message: "找不到圖片",
+  });
+});
+```
+
+#### 運作流程
+
+檔案存在：
+
+```text
+GET /outputs/cat.webp
+        ↓
+express.static()
+        ↓
+找到檔案
+        ↓
+200 OK
+```
+
+檔案不存在：
+
+```text
+GET /outputs/not-found.webp
+        ↓
+express.static()
+        ↓
+找不到檔案
+        ↓
+next()
+        ↓
+/outputs 專用 404 Middleware
+        ↓
+404 Not Found
+```
+
+#### 為什麼需要？
+
+若沒有專用的 404 Middleware，找不到檔案時通常會回傳 Express 預設的 404 頁面：
+
+```text
+Cannot GET /outputs/not-found.webp
+```
+
+加入專用的 404 Middleware 後，可以統一 API 的錯誤格式，例如：
+
+```json
+{
+  "status": "error",
+  "message": "找不到圖片"
+}
+```
+
+### `express.static()` 專用 404 與一般 404 的差異
+
+| 情境 | 處理方式 |
+|------|---------|
+| `/outputs/not-found.webp` | `/outputs` 專用 404 Middleware |
+| `/preview/not-found.webp` | `sendFile()` Route 自行處理 |
+| `/download/not-found.webp` | `download()` Route 自行處理 |
+| `/unknown-route` | 全域 404 Middleware |
+
+因此通常會同時存在：
+
+- `/outputs` 專用 404（處理靜態檔案）
+- 全域 404（處理不存在的 API 路由）
+  
+---
+
 ## 參考資料
 

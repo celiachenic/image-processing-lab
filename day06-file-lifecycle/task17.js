@@ -103,6 +103,12 @@ app.post("/images/process", upload.single("image"), async (req, res, next) => {
 //express.static() 預覽
 const outputs = path.join(__dirname, "outputs");
 app.use("/outputs", express.static(outputs));
+app.use("/outputs", (req, res) => {
+  return res.status(404).json({
+    status: "error",
+    message: "找不到圖片",
+  });
+});
 
 //res.sendFile() 預覽
 app.get("/preview/:filename", (req, res, next) => {
