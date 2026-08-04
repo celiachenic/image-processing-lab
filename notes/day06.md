@@ -1095,5 +1095,778 @@ Cannot GET /outputs/not-found.webp
   
 ---
 
+
+### 什麼是檔案生命週期？
+
+檔案生命週期是指一個檔案從建立、使用，到最後刪除的完整流程。
+
+在圖片處理工具中，流程可能是：
+
+```text
+使用者上傳圖片
+↓
+伺服器接收圖片
+↓
+Sharp 處理圖片
+↓
+產生輸出檔案
+↓
+使用者預覽或下載
+↓
+檔案過期後刪除
+```
+
+如果沒有清理策略，伺服器硬碟會持續累積檔案，最後可能造成：
+
+- 磁碟空間不足
+- Server 無法繼續寫入檔案
+- 備份與維護成本增加
+- 舊檔案長期暴露
+- 使用者隱私風險增加
+
+---
+
+### 圖片處理流程中可能產生的檔案
+
+#### 1. 原始上傳檔案
+
+如果 Multer 使用：
+
+```js
+multer.diskStorage()
+```
+
+使用者上傳的原始圖片會先寫入硬碟。
+
+例如：
+
+```text
+uploads/
+└── original-cat.jpg
+```
+
+圖片處理完成後，如果不再需要原圖，通常應立即刪除。
+
+如果使用：
+
+```js
+multer.memoryStorage()
+```
+
+原圖只存在於：
+
+```js
+req.file.buffer
+```
+
+不會產生原始暫存檔，因此不需要刪除硬碟上的原圖。
+
+#### 2. 處理後圖片
+
+Sharp 處理後可能產生：
+
+```text
+outputs/
+└── UUID.webp
+```
+
+處理後圖片需要保留一段時間，讓使用者可以：
+
+- 預覽
+- 下載
+- 重新整理頁面後再次取得
+
+但若永久保留，檔案會持續累積，因此通常需要設定保存期限。
+
+#### 3. 處理失敗時留下的檔案
+
+圖片處理過程若中途失敗，可能留下：
+
+- 已上傳但尚未刪除的原始檔
+- 寫入到一半的輸出檔
+- 空檔案
+- 損壞的圖片檔案
+
+因此錯誤處理時也要考慮清理。
+
+---
+
+### Node.js 刪除檔案
+
+ `fs.unlink()`：用來刪除檔案。
+
+Promise 版本：
+
+```js
+const fsPromises = require("node:fs/promises");
+
+await fsPromises.unlink(filePath);
+```
+
+例如：
+
+```js
+await fsPromises.unlink(
+  path.join(__dirname, "outputs", filename)
+);
+```
+
+
+#### 檔案不存在時
+
+如果刪除不存在的檔案，會產生錯誤：
+
+```text
+ENOENT
+```
+
+代表：
+
+> Error NO ENTry，找不到檔案或路徑。
+
+因此刪除時通常需要處理錯誤：
+
+```js
+try {
+  await fsPromises.unlink(filePath);
+} catch (error) {
+  if (error.code === "ENOENT") {
+    console.log("檔案已不存在");
+  } else {
+    console.error("刪除失敗", error);
+  }
+}
+```
+
+---
+
+### 為什麼清理失敗不應讓請求崩潰？
+
+假設圖片已經成功處理，使用者也應該取得結果。
+
+如果清理暫存檔失敗就回傳：
+
+```text
+500 Internal Server Error
+```
+
+會造成一個奇怪結果：
+
+```text
+圖片處理成功
+↓
+清理失敗
+↓
+整個 API 顯示失敗
+```
+
+但真正的主要功能其實已經完成。
+
+因此應區分：
+
+- 圖片處理失敗：主要流程失敗
+- 暫存檔清理失敗：次要流程失敗
+
+清理失敗通常應：
+
+- 記錄 Error Log
+- 不讓整個 Request 崩潰
+- 之後再由排程補清理
+
+---
+
+### 清理策略比較
+
+#### 策略一：圖片處理完成後立即刪除原始檔案
+
+流程：
+
+```text
+上傳原始圖片
+↓
+Sharp 處理
+↓
+輸出新圖片
+↓
+刪除原始圖片
+```
+
+##### 優點：
+
+- 原圖不會長期佔用空間
+- 隱私風險較低
+- 邏輯簡單
+
+##### 缺點
+
+- 刪除失敗時仍可能留下檔案
+- 如果後續還需要重新處理原圖，就無法使用
+
+#### 適用情境
+
+- 原圖只用一次
+- 輸出完成後不再需要原圖
+- 使用 `diskStorage()` 接收上傳檔案
+
+
+#### 策略二：輸出圖片保留一段時間再刪除
+
+流程：
+
+```text
+產生輸出圖片
+↓
+使用者預覽與下載
+↓
+保留一段時間
+↓
+刪除輸出圖片
+```
+
+例如：
+
+```text
+保留 30 分鐘
+保留 1 小時
+保留 24 小時
+```
+
+##### 優點
+
+- 使用者有時間預覽與下載
+- 不會永久累積檔案
+
+##### 缺點
+
+- 需要追蹤檔案建立時間
+- Server 停機後，記憶體中的計時器會消失
+
+
+#### 策略三：Server 啟動時清理過期檔案
+
+流程：
+
+```text
+Server 啟動
+↓
+讀取 outputs/
+↓
+檢查檔案建立或修改時間
+↓
+刪除超過期限的檔案
+```
+
+可以使用：
+
+```js
+fs.readdir()
+fs.stat()
+fs.unlink()
+```
+
+##### 優點
+
+- 可清理由上一次執行留下的檔案
+- 不依賴舊的 `setTimeout()`
+
+##### 缺點
+
+- 只有 Server 啟動時才執行
+- Server 長時間不重啟時，過期檔案仍會累積
+- 檔案很多時，啟動速度可能變慢
+
+
+#### 策略四：使用排程定期清理
+
+例如：
+
+```text
+每 1 小時清理一次
+每天凌晨清理一次
+```
+
+可使用：
+
+- `setInterval()`
+- cron
+- `node-cron`
+- 作業系統排程
+- 雲端排程服務
+
+| 方法              | Node 必須一直執行？ | 電腦關機後還會執行？ | 適合                    |
+| --------------- | ------------ | ---------- | --------------------- |
+| `setInterval()` | ✔            | ✘          | 每隔幾秒、測試、小工具           |
+| `node-cron`     | ✔            | ✘          | Node 專案內定時任務          |
+| Linux `cron`    | ✘（由 OS 啟動）   | ✘（電腦關機就不會） | 伺服器排程、備份              |
+| 作業系統排程          | ✘（由 OS 啟動）   | ✘（電腦關機就不會） | 執行腳本、維護工作             |
+| 雲端排程服務          | ✘            | ✔（由雲端執行）   | 正式產品、Serverless、跨機器服務 |
+
+
+##### 優點
+
+- Server 長時間運作時仍能持續清理
+- 不需要依賴每個 Request 個別建立計時器
+
+##### 缺點
+
+- 排程可能因 Server 停止而中斷
+- 多台 Server 同時執行時，可能重複清理
+- 需要處理競爭條件與錯誤紀錄
+
+---
+
+### `setTimeout()` 清理檔案
+
+例如：
+
+```js
+setTimeout(async () => {
+  try {
+    await fsPromises.unlink(outputPath);
+  } catch (error) {
+    console.error("刪除檔案失敗", error);
+  }
+}, 60 * 60 * 1000);
+```
+
+代表一小時後刪除。
+
+---
+
+### `setTimeout()` 清理檔案的限制
+
+- Server 重啟後 Timer 消失
+- 大量檔案會建立大量 Timer
+- 執行時間不一定精準
+- 不適合多台 Server
+- 無法清理先前遺留下來的檔案
+
+因此 `setTimeout()` 適合 Demo 或小型專案，但正式環境通常還需要定期掃描與清理機制。
+
+以下為細節補充：
+
+#### 1. Server 重啟後計時器會消失
+
+```text
+圖片產生
+↓
+設定 1 小時後刪除
+↓
+30 分鐘後 Server 重啟
+↓
+原本的計時器消失
+↓
+檔案不會被刪除
+```
+
+#### 2. 大量檔案會建立大量 Timer
+
+如果每天處理很多圖片，每張圖都建立一個 `setTimeout()`，記憶體中會存在大量計時器。
+
+#### 3. 不適合多台 Server
+
+若正式部署有多個 Server Instance，每台機器只知道自己建立的 Timer，不容易統一管理。
+
+#### 4. 刪除時間不保證精準
+
+`setTimeout()` 表示：
+
+> 最早在指定時間後執行。
+
+若 Event Loop 忙碌，實際執行時間可能延後。
+
+---
+
+### 檔案建立時間與修改時間
+
+`fsPromises.stat()` 可取得指定檔案或資料夾的詳細資訊。
+
+
+```js
+const stat = await fsPromises.stat(filePath);
+//stat：回傳的檔案資訊物件（Stats Object）。
+```
+
+可取得：
+
+```js
+stat.birthtime //檔案建立時間（Date）
+
+stat.birthtimeMs //檔案建立時間（毫秒 Timestamp）
+
+stat.mtime //檔案最後修改時間（Date）
+
+stat.mtimeMs //檔案最後修改時間（毫秒 Timestamp）
+```
+
+常用屬性：
+| 屬性            | 型別       | 說明                             | 範例                    |
+| ------------- | -------- | ------------------------------ | --------------------- |
+| `birthtime`   | `Date`   | 檔案建立時間                         | `2026-08-02 14:30:10` |
+| `birthtimeMs` | `Number` | 檔案建立時間（毫秒 Timestamp），適合計算時間差   | `1754122610123`       |
+| `mtime`       | `Date`   | 檔案最後修改時間                       | `2026-08-02 15:20:45` |
+| `mtimeMs`     | `Number` | 檔案最後修改時間（毫秒 Timestamp），適合計算時間差 | `1754127645123`       |
+| `size`        | `Number` | 檔案大小，單位為 bytes                 | `182345`              |
+
+
+
+判斷檔案是否過期時，常使用 `stat.birthtimeMs` 或是 `stat.mtimeMs`
+
+```js
+const age = Date.now() - stat.birthtimeMs
+//檔案距離建立已經過多久（毫秒）
+```
+
+```js
+const age = Date.now() - stat.mtimeMs; 
+//檔案距離上次被修改已經過多久（毫秒）
+```
+
+例如：
+
+```js
+if (Date.now() - stat.birthtimeMs > 60 * 60 * 1000) {
+  await fsPromises.unlink(filePath);
+}
+```
+
+若超過設定的保存期限，就可以刪除檔案。
+
+
+---
+
+### 清理資料夾的基本流程
+
+```text
+讀取 outputs/
+↓
+逐一取得檔案資訊
+↓
+判斷是否過期
+↓
+過期則刪除
+↓
+單一檔案刪除失敗時記錄錯誤
+↓
+繼續處理其他檔案
+```
+
+常用 API：
+
+```js
+fsPromises.readdir() //看資料夾裡有哪些東西
+fsPromises.stat()    //查看每個檔案的資訊
+fsPromises.unlink()  //刪除檔案
+```
+
+---
+
+### 如果 API 回傳後立刻刪除輸出圖片，使用者還能下載嗎？
+
+通常不能。
+
+因為 API 回傳的：
+
+```text
+/download/:filename
+```
+
+只是網址。
+
+使用者之後點擊下載連結時，Server 才會重新讀取檔案。
+
+若圖片已經被刪除：
+
+```text
+點擊下載
+↓
+找不到檔案
+↓
+404 Not Found
+```
+
+因此輸出圖片至少要保留到使用者完成下載，或保留一段合理期限。
+
+---
+
+### Server 重新啟動後，尚未清理的檔案怎麼辦？
+
+可在 Server 啟動時：
+
+```text
+讀取 outputs/
+↓
+檢查每個檔案的修改時間
+↓
+刪除超過期限的檔案
+```
+
+也可以搭配定期排程，避免只依賴啟動時清理。
+
+---
+
+### 正式部署後，將圖片存在本機硬碟可能遇到哪些問題？
+
+#### 檔案可能消失
+
+部分雲端部署環境的本機硬碟是暫時性的，重新部署或重新啟動後，檔案可能消失。
+
+#### 多台 Server 無法共享檔案
+
+例如：
+
+```text
+圖片存到 Server A
+↓
+下一次下載請求被導向 Server B
+↓
+Server B 找不到圖片
+```
+
+#### 磁碟空間有限
+
+檔案持續累積可能塞滿硬碟。
+
+#### 備份與擴充困難
+
+圖片放在本機，不容易進行跨機器共享、備份與擴充。
+
+正式產品通常會考慮：
+
+- AWS S3
+- Google Cloud Storage
+- Cloudflare R2
+- Azure Blob Storage
+
+---
+
+### bootcamp 練習策略
+
+目前使用：
+
+```js
+multer.memoryStorage()
+```
+
+因此原始圖片只存在於 Buffer，不會寫入硬碟，不需要清理原始上傳檔。
+
+處理後圖片會存入：
+
+```text
+outputs/
+```
+
+策略：
+
+```text
+圖片處理成功
+↓
+輸出檔案保留一段時間
+↓
+使用者可以預覽與下載
+↓
+到期後刪除
+```
+
+初步可以先實作：
+
+```text
+setTimeout() 延遲刪除輸出圖片
+```
+
+後續較完整的版本可再加入：
+
+```text
+Server 啟動時掃描 outputs/
+↓
+清理過期檔案
+```
+
+---
+
+### 讀取資料夾
+
+```js
+const fs = require("node:fs/promises");
+
+const files = await fs.readdir("./outputs");
+
+console.log(files);
+```
+
+假設 outputs 裡有：
+
+```
+outputs/
+├── a.webp
+├── b.webp
+├── c.webp
+```
+
+files 會是：
+```
+["a.webp", "b.webp", "c.webp"]
+```
+
+
+若想逐一讀取，最常見就是：
+
+```js
+for (const file of files) {
+  console.log(file);
+}
+```
+
+輸出：
+```
+a.webp
+b.webp
+c.webp
+```
+
+---
+
+### `for...of` 迴圈中的錯誤處理
+
+當使用 `for...of` 搭配 `await` 逐一處理檔案時，**是否會繼續處理後面的檔案，取決於錯誤處理的位置。**
+
+
+#### 情況一：沒有 `try...catch`
+
+```js
+for (const file of files) {
+  const stat = await fs.stat(file);
+  console.log(stat.size);
+}
+
+console.log("完成");
+```
+
+假設：
+
+```text
+a.webp ✅
+b.webp ❌（不存在）
+c.webp
+```
+
+執行結果：
+
+```text
+a.webp
+Error: ENOENT
+```
+
+* 程式立即停止。
+* `c.webp` 不會繼續處理。
+* `console.log("完成")` 也不會執行。
+
+
+#### 情況二：每個檔案各自使用 `try...catch`（推薦）
+
+```js
+for (const file of files) {
+  try {
+    const stat = await fs.stat(file);
+    console.log(file, stat.size);
+  } catch (err) {
+    console.log(`${file} 讀取失敗`);
+  }
+}
+
+console.log("完成");
+```
+
+假設：
+
+```text
+a.webp ✅
+b.webp ❌
+c.webp ✅
+```
+
+執行結果：
+
+```text
+a.webp 12345
+b.webp 讀取失敗
+c.webp 98765
+完成
+```
+
+
+* 單一檔案失敗不會影響其他檔案。
+* 其他檔案仍會繼續處理。
+* 最後仍會執行後續程式。
+
+
+
+#### 情況三：整個迴圈只包一個 `try...catch`
+
+```js
+try {
+  for (const file of files) {
+    const stat = await fs.stat(file);
+    console.log(stat.size);
+  }
+} catch (err) {
+  console.log(err);
+}
+```
+
+假設第二個檔案失敗：
+
+```text
+a.webp
+ENOENT
+```
+
+
+* `catch` 會接收到錯誤。
+* 但整個 `for...of` 會立即結束。
+* `c.webp` 不會繼續處理。
+
+
+
+如果是在做批次工作，例如：
+
+* 清理圖片
+* 壓縮圖片
+* 備份檔案
+* 讀取大量資料
+
+通常希望：
+
+* 一個檔案失敗，不影響其他檔案。
+
+因此推薦寫法：
+
+```js
+for (const file of files) {
+  try {
+    // 處理單一檔案
+  } catch (err) {
+    console.error(`${file} 處理失敗：`, err.message);
+    continue; // 可省略，catch 結束後本來就會進入下一圈
+  }
+}
+```
+
+
+#### 在圖片壓縮專案中的應用
+
+假設 `outputs/` 資料夾共有 500 張圖片：
+
+* 第 37 張被手動刪除
+* 第 85 張權限不足
+* 第 142 張檔案損毀
+
+如果沒有個別處理錯誤，程式會在第一個錯誤就停止，後面的檔案都無法處理。
+
+因此，實務上批次處理通常會在每一次迴圈內使用 `try...catch`，讓單一檔案失敗時，只記錄錯誤並繼續處理下一個檔案，提高整體工作的穩定性。
+
+
+---
+
 ## 參考資料
 

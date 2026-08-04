@@ -43,3 +43,45 @@
 - 如果伺服器重新啟動，尚未清理的檔案該怎麼辦？
 - 正式部署後，將圖片存在本機硬碟可能遇到哪些問題？
  */
+
+/*task 18 先專注於實做刪除 outputs 資料夾內過期檔案
+ 目前設定一分鐘過期，比較好確認是否真的有刪除
+*/
+
+const fspromises = require("node:fs/promises");
+const path = require("path");
+
+const dirpath = path.join(__dirname, "outputs");
+const EXPIRE_TIME = 60 * 1000; // 測試用：1 分鐘 ( 60000 毫秒)
+
+const readDir = async (dirpath) => {
+  return fspromises.readdir(dirpath);
+};
+
+const main = async () => {
+  let files;
+  try {
+    files = await readDir(dirpath);
+  } catch (error) {
+    console.log("讀取資料夾失敗");
+    return; //避免後續繼續執行
+  }
+  for (const file of files) {
+    const filepath = path.join(dirpath, file);
+    try {
+      const stat = await fspromises.stat(filepath);
+      //若已建立 1 分鐘以上就刪除
+      if (Date.now() > stat.birthtimeMs + EXPIRE_TIME) {
+        await fspromises.unlink(filepath);
+        console.log(`已刪除過期檔案：${file}`);
+      }
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        console.log("檔案已不存在");
+      } else {
+        console.error("檔案處理失敗", error);
+      }
+    }
+  }
+};
+main();
